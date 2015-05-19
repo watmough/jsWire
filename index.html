@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+	<meta http-equiv="Content-Type" content="text/html;charset=ISO-8859-1"> 
+	
+	<!--
+	Copyright 2015 Jonathan Watmough
+
+	Licensed under the Apache License, Version 2.0 (the "License");
+	you may not use this file except in compliance with the License.
+	You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+	Unless required by applicable law or agreed to in writing, software
+	distributed under the License is distributed on an "AS IS" BASIS,
+	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+	See the License for the specific language governing permissions and
+	limitations under the License.
+	-->
+		
+<head>
+	<script src="wwFunctions.js"></script>
+	<script src="three.js"></script>
+</head>
+<body>
+<h3>Wire World
+
+	<input type="file" id="files" name="files[]" multiple />
+	<output id="list"></output>
+	<br /><canvas id="canvas" width="1024" height="1024"></canvas>
+
+<script>
+	// set up asm.js stuff
+	var heap = new ArrayBuffer(4*1024*1024);
+	var ww   = new wwFunctions(window,{},heap);
+	
+	// three internal buffers
+	var s1 = new Uint8Array(heap,0);
+	var s2 = new Uint8Array(heap,1048576);
+	var s3 = new Uint16Array(heap,2097152);
+	
+	// Check for the various File API support.
+	if (window.File && window.FileReader && window.FileList && window.Blob) {
+		// Great success! All the File APIs are supported.
+		// open file from local disc
+	} else {
+	  alert('The File APIs are not fully supported in this browser.');
+	}
+
+	var scene = new THREE.Scene();
+	var camera = new THREE.PerspectiveCamera( 75, 
+		window.innerWidth / window.innerHeight, 0.1, 6000 );
+	var renderer = new THREE.WebGLRenderer();
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	document.body.appendChild( renderer.domElement );
+
+	var geometry = new THREE.PlaneGeometry(1024, 1024);
+	var texture = THREE.ImageUtils.generateDataTexture(1024,1024,new THREE.Color(0xff00ff));
+	var material = new THREE.MeshBasicMaterial({map : texture});
+	material.side = THREE.FrontSide;
+	
+	// create a mesh to render
+	var mesh = new THREE.Mesh( geometry, material );
+	scene.add( mesh );
+	camera.position.z = 800; //1500
+
+	// handle selecting a file
+	function handleFileSelect(evt) {
+		var files = evt.target.files; // FileList object
+
+		// files is a FileList of File objects. List some properties.
+		var output = [];
+		for (var i = 0, f; f = files[i]; i++) {
+			var reader = new FileReader();
+			// Closure to capture the file information.
+			reader.onload = (function(theFile) {
+				return function(e) {
+					// do something with all the bytes we just loaded
+					console.log("data: " + e.target.result);
+					wwReadData(e.target.result);
+					};
+				})(f);
+
+			// Read in the image file as a data URL.
+			reader.readAsArrayBuffer(f);
+		}
+		document.getElementById('list').innerHTML = '<ul>' + output.join('') + '</ul>';
+	}
+
+	// select file hook
+	document.getElementById('files').addEventListener('change', handleFileSelect, false);
+
+	// function to open a wire world file
+	wwReadData = function(buffer)
+	{
+		// status
+		console.log("Called to read bytes: " + buffer);
+		
+		var bytes = new Uint8Array(buffer);
+		
+		// plot it
+		var canvas = document.getElementById('canvas');
+		var ctx = canvas.getContext('2d');
+		
+		// print out length between separators
+		var linecount = 0;
+		var startline = 0;
+		var width = 0;
+		var spaces = 0;
+		var wires = 0;
+		var heads = 0;
+		var tails = 0;
+		var x = 0, y = 0;
+		for(i=0;i<bytes.byteLength;++i) {
+			var value = bytes[i];
+			if(value==0x20) {
+				++spaces; ++x;
+				continue;
+			}
+			else if(value==0x23) {
+				++wires; ++x;
+				continue;
+			}
+			else if(value==0x7E) {
+				++heads; ++x;
+				continue;
+			}
+			else if(value==0x40) {
+				++tails; ++x;
+				continue;
+			}
+			else if(value==0x0A) {
+				bytes[i] = 0x20;
+				++x; 
+				if(x>width) {
+					width = x;
+					startline = linecount;
+				}
+				++linecount; ++y;
+				x = 0;
+				continue;
+			}
+			else {
+				bytes[i] = 0x20;
+			}
+			
+			++x;
+		}
+		
+		// log the details
+		console.log(" first: " + startline);	// discard this many lines
+		console.log(" lines: " + linecount);
+		console.log(" width: " + width);
+		console.log("spaces: " + spaces);
+		console.log(" wires: " + wires);
+		console.log(" heads: " + heads);
+		console.log(" tails: " + tails);
+		
+		// load file into state array buffer
+		wwLoadState(bytes,/*skip*/startline,width,linecount);
+		wwRender(ctx,s1,width,linecount);
+		
+		// update state
+		var last=0;
+		var turbo = 0;
+		
+		// loop: this is the animation function
+		loop = function() {
+			if(last==0) {
+				var start = Date.now();
+				ww.wwStep(0,width,linecount);
+				for(i=0;i<turbo;++i) {
+					ww.wwStep(1,width,linecount);
+					ww.wwStep(0,width,linecount);
+				}
+				console.log(""+((turbo<<1)+1)+" steps in " + (Date.now()-start) + " millisecs");
+				start = Date.now();
+				if(turbo==0)
+					// render only changed cells
+					wwRenderChanged(ctx,s2,width,linecount);
+				else
+					// do a full render
+					wwRender(ctx,s2,width,linecount);
+				tjRender(s2,width,linecount);
+				console.log("Render step in " + (Date.now()-start) + " millisecs");
+				last=1;
+			} else {
+				var start = Date.now();
+				ww.wwStep(1,width,linecount);
+				for(i=0;i<turbo;++i) {
+					ww.wwStep(0,width,linecount);
+					ww.wwStep(1,width,linecount);
+				}
+				if(turbo==0)
+					// render only changed cells
+					wwRenderChanged(ctx,s1,width,linecount);
+				else
+					// do a full render
+					wwRender(ctx,s1,width,linecount);
+				tjRender(s1,width,linecount);
+				last=0;
+			}
+			
+			requestAnimationFrame( loop );
+			
+		};
+		loop();	
+	}
+		
+	// decode file and return as array
+	wwLoadState = function(bytes,startline,width,linecount) 
+	{
+		"use strict";
+		
+		// skip lines
+		var pos=0;
+		for(var i=0;i<bytes.byteLength && startline>0;++i) {
+			pos++;
+			var value = bytes[i];
+			if(value==0x20) {
+				--startline;
+			}
+		}
+
+		// copy lines to state1,2
+		var value;
+		for(var y=0;y<linecount;++y) {
+			pos += width;
+			for(var x=0;x<width;++x) {
+				if(x<2)
+					value = 32;
+				else
+					value = bytes[pos+x];
+				s1[y*width+x] = value;
+				s2[y*width+x] = value;
+			}
+		}	
+	}
+
+	// set up code
+	tjSetup = function() {
+	}
+
+	// hacky rendering code to a three js texture
+	// only generates one texture, and then just redraws it as the data changes in the texture 
+	// not a power of two
+	var first = true;
+	tjRender = function(bytes,width,linecount) {
+		if(first) {
+			texture = new THREE.DataTexture(bytes, width, linecount, THREE.LuminanceFormat,
+				THREE.UnsignedByteType, THREE.UVMapping, THREE.ClampToEdgeWrapping,
+				THREE.ClampToEdgeWrapping, THREE.NearestFilter, THREE.NearestFilter, 1);
+			mesh.material.map = texture;
+			texture.needsUpdate = true;
+			mesh.material.needsUpdate = true;
+			first = false;
+		}
+		texture.needsUpdate = true;
+		renderer.render( scene, camera );
+	}
+
+	// attempt at a faster rendering function
+	// set turbo to 0 (no skip, render every generation) to use
+	wwRenderChanged = function(ctx, bytes, width, linecount)
+	{
+		var b3=0;
+		var count = 0;
+		while(true) {
+			var x=s3[b3>>2]; b3 = b3+4;
+			var y=s3[b3>>2]; b3 = b3+4;
+			if(x==0)
+				break;
+			
+			// get value to render at x,y
+			var pos = y*width;
+			var v = bytes[pos+x];
+
+			// electron
+			if(v==0x40)
+				ctx.fillStyle = "#054DF5";
+			// tail
+			else if(v==0x7E)
+				ctx.fillStyle = "#83D485";
+			// wire
+			else if(v==0x23) 
+				ctx.fillStyle = "#D1C29F";
+			ctx.fillRect(x,y,1,1);
+			count = count+1;
+		};
+//		console.log("Rendered %d changes",count);
+	}
+
+	// slowest renderer
+	// draws all wires and heads and tails
+	wwRender = function(ctx, bytes, width, linecount)
+	{
+		for(y=0;y<linecount;++y) {
+			var pos = y*width;
+			for(x=0;x<width;++x) {
+				if((value=bytes[pos+x])==0x20)
+					continue;
+				// wire
+				if(value==0x23) 
+					ctx.fillStyle = "#D1C29F";
+				// tail
+				if(value==0x7E)
+					ctx.fillStyle = "#83D485";
+				// electron
+				if(value==0x40)
+					ctx.fillStyle = "#054DF5";
+				ctx.fillRect(x,y,1,1);
+			}
+		}	
+	}
+
+</script>
+
+	
+</body>
+</html>
