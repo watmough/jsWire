@@ -173,7 +173,7 @@
 					ww.wwStep(1,width,linecount);
 					ww.wwStep(0,width,linecount);
 				}
-				console.log(""+((turbo<<1)+1)+" steps in " + (Date.now()-start) + " millisecs");
+//				console.log(""+((turbo<<1)+1)+" steps in " + (Date.now()-start) + " millisecs");
 				start = Date.now();
 				if(turbo==0)
 					// render only changed cells
@@ -182,7 +182,7 @@
 					// do a full render
 					wwRender(ctx,s2,width,linecount);
 				tjRender(s2,width,linecount);
-				console.log("Render step in " + (Date.now()-start) + " millisecs");
+//				console.log("Render step in " + (Date.now()-start) + " millisecs");
 				last=1;
 			} else {
 				var start = Date.now();
@@ -247,7 +247,7 @@
 	var first = true;
 	tjRender = function(bytes,width,linecount) {
 		if(first) {
-			texture = new THREE.DataTexture(bytes, width, linecount, THREE.LuminanceFormat,
+			texture = new THREE.DataTexture(bytes, width, linecount, THREE.AlphaFormat,
 				THREE.UnsignedByteType, THREE.UVMapping, THREE.ClampToEdgeWrapping,
 				THREE.ClampToEdgeWrapping, THREE.NearestFilter, THREE.NearestFilter, 1);
 			mesh.material.map = texture;

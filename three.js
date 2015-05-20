@@ -4,6 +4,10 @@
  * @author mrdoob / http://mrdoob.com/
  */
 
+// Define this is you want to log the shaders
+// JAW 20150519
+var LOGSHADERS = {};
+
 var THREE = { REVISION: '71' };
 
 // browserify support
@@ -16692,7 +16696,14 @@ THREE.ShaderChunk[ 'lights_phong_vertex'] = "#if MAX_SPOT_LIGHTS > 0 || defined(
 
 // File:src/renderers/shaders/ShaderChunk/map_fragment.glsl
 
-THREE.ShaderChunk[ 'map_fragment'] = "#ifdef USE_MAP\n\n	vec4 texelColor = texture2D( map, vUv );\n\n	texelColor.xyz = inputToLinear( texelColor.xyz );\n\n	diffuseColor *= texelColor;\n\n#endif";
+// ### JAW 20150519 Hacked to map to colors
+THREE.ShaderChunk[ 'map_fragment'] = 
+"#ifdef USE_MAP\n\n	"+
+" vec4 texelColor = texture2D( map, vUv ).aaaa;\n\n"+
+//" texelColor.xyz = inputToLinear( texelColor.xyz );\n\n"+
+" if( texelColor.x > 32.5/256.0 ) texelColor.x = 1.0;\n\n"+
+" diffuseColor *= texelColor;\n\n"+
+"#endif";
 
 // File:src/renderers/shaders/ShaderChunk/lightmap_vertex.glsl
 
@@ -24536,8 +24547,13 @@ THREE.WebGLProgram = ( function () {
 		var glVertexShader = new THREE.WebGLShader( _gl, _gl.VERTEX_SHADER, prefix_vertex + vertexShader );
 		var glFragmentShader = new THREE.WebGLShader( _gl, _gl.FRAGMENT_SHADER, prefix_fragment + fragmentShader );
 
-		_gl.attachShader( program, glVertexShader );
-		_gl.attachShader( program, glFragmentShader );
+		console.log("fragment shader:", prefix_fragment + fragmentShader);
+		console.log("vertex shader:", prefix_vertex + vertexShader);
+
+		if( LOGSHADERS ) {
+			_gl.attachShader( program, glVertexShader );
+			_gl.attachShader( program, glFragmentShader );
+		}
 
 		if ( index0AttributeName !== undefined ) {
 
