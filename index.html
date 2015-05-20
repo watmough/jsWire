@@ -248,8 +248,8 @@
 	tjRender = function(bytes,width,linecount) {
 		if(first) {
 			texture = new THREE.DataTexture(bytes, width, linecount, THREE.AlphaFormat,
-				THREE.UnsignedByteType, THREE.UVMapping, THREE.ClampToEdgeWrapping,
-				THREE.ClampToEdgeWrapping, THREE.NearestFilter, THREE.NearestFilter, 1);
+				THREE.UnsignedByteType, THREE.UVMapping, THREE.RepeatWrapping,
+				THREE.RepeatWrapping, THREE.NearestFilter, THREE.NearestFilter, 1);
 			mesh.material.map = texture;
 			texture.needsUpdate = true;
 			mesh.material.needsUpdate = true;

@@ -16701,7 +16701,7 @@ THREE.ShaderChunk[ 'map_fragment'] =
 "#ifdef USE_MAP\n\n	"+
 " vec4 texelColor = texture2D( map, vUv ).aaaa;\n\n"+
 //" texelColor.xyz = inputToLinear( texelColor.xyz );\n\n"+
-" if( texelColor.x > 32.5/256.0 ) texelColor.x = 1.0;\n\n"+
+" if( texelColor.a > 32.5/256.0 ) texelColor.x = 1.0;\n\n"+
 " diffuseColor *= texelColor;\n\n"+
 "#endif";
 
